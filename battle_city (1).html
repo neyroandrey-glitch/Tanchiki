@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Battle City</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            height: 100dvh; /* Динамическая высота с учетом адресной строки */
+            overflow: hidden;
+            position: fixed;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; /* Запрет системных жестов и зума */
+            display: flex;
+            flex-direction: column;
+        }
+
+        #game-wrapper {
+            flex: 1;
+            display: flex;
+            position: relative;
+            justify-content: center;
+            align-items: center;
+            background-color: #1a1a1a;
+            padding: 6px;
+            min-height: 0; /* Предотвращает раздувание флекс-контейнера */
+            width: 100%;
+            overflow: hidden;
+        }
+
+        #game-frame {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: #555555;
+            padding: 6px;
+            border-radius: 8px;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.9);
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        canvas {
+            background-color: #000;
+            max-width: calc(100vw - 90px);
+            max-height: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: contain;
+            image-rendering: pixelated;
+        }
+
+        #hud-panel {
+            width: 68px;
+            height: 100%;
+            max-height: 416px;
+            background-color: #727272;
+            border-left: 3px solid #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 4px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .enemy-reserve-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 14px);
+            gap: 4px;
+            justify-content: center;
+            margin-top: 4px;
+        }
+
+        .enemy-icon {
+            width: 14px;
+            height: 14px;
+            background-color: #000;
+            clip-path: polygon(25% 0%, 75% 0%, 75% 25%, 100% 25%, 100% 100%, 75% 100%, 75% 75%, 25% 75%, 25% 100%, 0% 100%, 0% 25%, 25% 25%);
+        }
+
+        .enemy-icon.dead {
+            opacity: 0.12;
+            filter: grayscale(1);
+        }
+
+        .hud-stat-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 4px;
+            width: 100%;
+        }
+
+        .hud-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+        }
+
+        .hud-flag {
+            width: 22px;
+            height: 22px;
+            background: #e63946;
+            clip-path: polygon(0 0, 100% 50%, 0 100%, 0 0);
+            margin-bottom: 2px;
+        }
+
+        #controls {
+            flex-shrink: 0;
+            height: calc(150px + env(safe-area-inset-bottom, 15px));
+            padding-bottom: env(safe-area-inset-bottom, 15px);
+            background: #121212;
+            position: relative;
+            border-top: 3px solid #2d2d2d;
+            width: 100%;
+        }
+
+        #dpad {
+            position: absolute;
+            left: 20px;
+            top: 10px;
+            width: 130px;
+            height: 130px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 50%;
+            touch-action: none;
+        }
+
+        .dpad-cross {
+            position: absolute;
+            background: #3a3a3a;
+            border-radius: 6px;
+        }
+        .dpad-v { top: 8px; bottom: 8px; left: 45px; right: 45px; }
+        .dpad-h { left: 8px; right: 8px; top: 45px; bottom: 45px; }
+        .dpad-center { 
+            position: absolute; left: 49px; top: 49px; width: 32px; height: 32px; 
+            background: #242424; border-radius: 50%; 
+        }
+
+        .dir-indicator {
+            position: absolute;
+            width: 0; height: 0;
+            border-style: solid;
+        }
+        .dir-up { top: 15px; left: 53px; border-width: 0 12px 16px 12px; border-color: transparent transparent #777 transparent; }
+        .dir-down { bottom: 15px; left: 53px; border-width: 16px 12px 0 12px; border-color: #777 transparent transparent transparent; }
+        .dir-left { left: 15px; top: 53px; border-width: 12px 16px 12px 0; border-color: transparent #777 transparent transparent; }
+        .dir-right { right: 15px; top: 53px; border-width: 12px 0 12px 16px; border-color: transparent transparent transparent #777; }
+
+        #btn-fire {
+            position: absolute;
+            right: 25px;
+            top: 20px;
+            width: 95px;
+            height: 95px;
+            background: radial-gradient(circle, #e63946 0%, #a81c26 100%);
+            border: 4px solid #f1faee;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: 900;
+            color: #ffffff;
+            box-shadow: 0 6px 0 #670d13, 0 10px 12px rgba(0,0,0,0.6);
+            touch-action: none;
+            transition: transform 0.05s, box-shadow 0.05s;
+        }
+
+        #btn-fire.active {
+            transform: translateY(5px);
+            box-shadow: 0 1px 0 #670d13, 0 3px 5px rgba(0,0,0,0.6);
+        }
+
+        .hint {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 11px;
+            color: #ccc;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 4px 8px;
+            border-radius: 4px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        @media (max-height: 520px) {
+            .hint { display: none; }
+        }
+
+        .modal-overlay {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.88);
+            padding: 24px 28px;
+            border-radius: 12px;
+            z-index: 25;
+            text-align: center;
+        }
+
+        #game-over-modal {
+            border: 3px solid #e63946;
+            box-shadow: 0 0 25px rgba(230, 57, 70, 0.7);
+        }
+
+        #stage-clear-modal {
+            border: 3px solid #52b788;
+            box-shadow: 0 0 25px rgba(82, 183, 136, 0.7);
+        }
+
+        .modal-overlay h2 {
+            font-size: 26px;
+            margin-bottom: 8px;
+            letter-spacing: 2px;
+        }
+
+        .modal-overlay button {
+            color: #000;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 15px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 14px;
+        }
+
+        @media (min-width: 850px) and (min-height: 600px) {
+            #controls { display: none; }
+            #game-wrapper { padding: 30px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="hint">WASD / Стрелки — Движение. Пробел / Enter — Огонь. Тап активирует звук!</div>
+
+    <div id="game-wrapper">
+        <div id="game-frame">
+            <canvas id="gameCanvas" width="416" height="416"></canvas>
+
+            <div id="hud-panel">
+                <div class="hud-stat-box">
+                    <span style="font-size: 9px; margin-bottom: 2px;">ENEMIES</span>
+                    <div class="enemy-reserve-grid" id="enemy-grid"></div>
+                </div>
+
+                <div class="hud-stat-box">
+                    <div class="hud-badge">
+                        <span style="color: #000; font-weight: 900;">1P</span>
+                    </div>
+                    <div style="font-size: 15px;" id="lives-display">⚡3</div>
+                    <div style="font-size: 11px; color:#ffb703;" id="star-display">★0</div>
+                </div>
+
+                <div class="hud-stat-box">
+                    <span style="font-size: 9px;">SCORE</span>
+                    <span id="score-display" style="color: #fff; text-shadow: 1px 1px 0 #000;">0</span>
+                </div>
+
+                <div class="hud-stat-box" style="margin-bottom: 4px;">
+                    <div class="hud-flag"></div>
+                    <div style="font-size: 14px;" id="stage-display">1</div>
+                </div>
+            </div>
+
+            <div id="game-over-modal" class="modal-overlay">
+                <h2 style="color: #e63946;">GAME OVER</h2>
+                <p id="game-over-reason" style="margin-bottom: 8px; color: #ddd; font-size: 14px;">ПОРАЖЕНИЕ!</p>
+                <div style="color: #ffb703; font-size: 15px;" id="final-score-over">Очки: 0</div>
+                <button id="btn-restart" style="background: #ffb703; box-shadow: 0 4px 0 #b37e00;">ИГРАТЬ СНОВА</button>
+            </div>
+
+            <div id="stage-clear-modal" class="modal-overlay">
+                <h2 style="color: #52b788;">STAGE CLEAR!</h2>
+                <p style="margin-bottom: 8px; color: #d8f3dc; font-size: 14px;">ВСЕ ТАНКИ УНИЧТОЖЕНЫ!</p>
+                <div style="color: #ffb703; font-size: 16px;" id="final-score-win">Очки: 0</div>
+                <button id="btn-next" style="background: #52b788; box-shadow: 0 4px 0 #2d6a4f;">СЛЕДУЮЩИЙ РАУНД</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div id="dpad">
+            <div class="dpad-cross dpad-v"></div>
+            <div class="dpad-cross dpad-h"></div>
+            <div class="dpad-center"></div>
+            <div class="dir-indicator dir-up" id="ind-up"></div>
+            <div class="dir-indicator dir-down" id="ind-down"></div>
+            <div class="dir-indicator dir-left" id="ind-left"></div>
+            <div class="dir-indicator dir-right" id="ind-right"></div>
+        </div>
+        <div id="btn-fire">FIRE</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameOverModal = document.getElementById('game-over-modal');
+        const btnRestart = document.getElementById('btn-restart');
+        const stageClearModal = document.getElementById('stage-clear-modal');
+        const btnNext = document.getElementById('btn-next');
+        const enemyGridEl = document.getElementById('enemy-grid');
+        const livesDisplayEl = document.getElementById('lives-display');
+        const starDisplayEl = document.getElementById('star-display');
+        const scoreDisplayEl = document.getElementById('score-display');
+        const gameOverReasonEl = document.getElementById('game-over-reason');
+        const finalScoreOverEl = document.getElementById('final-score-over');
+        const finalScoreWinEl = document.getElementById('final-score-win');
+
+        const TILE_SIZE = 32;       // 13x13 тайлов
+        const BLOCK_SIZE = 16;      // 26x26 суб-блоков по 16x16px
+        const GRID_BLOCKS = 26;
+        const CANVAS_SIZE = 416;
+
+        // Типы блоков
+        const EMPTY = 0;
+        const BRICK = 1;
+        const STEEL = 2;
+        const WATER = 3;
+        const GRASS = 4;
+        const BASE = 5;
+
+        // 4 класса врагов
+        const ENEMY_TYPES = {
+            REGULAR: { id: 'REGULAR', speed: 1.3, hp: 1, bulletSpeed: 4.2, color: '#c0c0c0', score: 100 },
+            FAST:    { id: 'FAST',    speed: 2.1, hp: 1, bulletSpeed: 4.5, color: '#fca311', score: 200 },
+            RAPID:   { id: 'RAPID',   speed: 1.3, hp: 1, bulletSpeed: 7.2, color: '#48cae4', score: 300 },
+            HEAVY:   { id: 'HEAVY',   speed: 0.9, hp: 4, bulletSpeed: 4.2, color: '#2d6a4f', score: 400 }
+        };
+
+        // Цвета брони тяжелого танка при уменьшении HP
+        const HEAVY_HP_COLORS = {
+            4: '#2d6a4f', // зеленый
+            3: '#ffb703', // желтый
+            2: '#e63946', // красный
+            1: '#f1faee'  // белый/светлый критический
+        };
+
+        const BONUS_TYPES = ['grenade', 'clock', 'shovel', 'star', 'helmet'];
+
+        let isGameOver = false;
+        let isVictory = false;
+        let isBaseDestroyed = false;
+
+        let score = 0;
+        let playerLives = 3;
+        let currentStage = 1;
+        const TOTAL_ENEMIES_PER_LEVEL = 20;
+        let remainingEnemiesToSpawn = TOTAL_ENEMIES_PER_LEVEL;
+        let destroyedEnemiesCount = 0;
+
+        // Таймеры глобальных бонусов
+        let freezeEnemiesTimer = 0;
+        let shovelTimer = 0;
+
+        // Точки спавна врагов (тайлы [0,0], [0,6], [0,12])
+        const ENEMY_SPAWN_COORDS = [
+            { x: 0 * TILE_SIZE, y: 0 * TILE_SIZE },
+            { x: 6 * TILE_SIZE, y: 0 * TILE_SIZE },
+            { x: 12 * TILE_SIZE, y: 0 * TILE_SIZE }
+        ];
+        let nextSpawnPointIndex = 0;
+        let spawnEnemyTimer = 0;
+
+        // Списки сущностей
+        let enemies = [];
+        let enemyBullets = [];
+        let playerBullets = [];
+        let spawnEffects = [];
+        let explosions = [];
+        let bonuses = [];
+
+        // Ростер противников на раунд
+        let enemyRoster = [];
+
+        let audioCtx = null;
+        let motorOsc = null;
+        let motorGain = null;
+        let isMotorPlaying = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    audioCtx = new AudioContextClass();
+                    setupMotorSound();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Автоматическая инициализация аудио при любом взаимодействии с мобильным браузером
+        window.addEventListener('touchstart', initAudio, { once: true, passive: true });
+        window.addEventListener('pointerdown', initAudio, { once: true, passive: true });
+        window.addEventListener('keydown', initAudio, { once: true });
+
+        function setupMotorSound() {
+            try {
+                motorOsc = audioCtx.createOscillator();
+                motorGain = audioCtx.createGain();
+                motorOsc.type = 'sawtooth';
+                motorOsc.frequency.setValueAtTime(45, audioCtx.currentTime);
+                motorGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(140, audioCtx.currentTime);
+
+                motorOsc.connect(filter);
+                filter.connect(motorGain);
+                motorGain.connect(audioCtx.destination);
+                motorOsc.start();
+            } catch (e) {}
+        }
+
+        function setMotorRumble(active) {
+            if (!motorGain || !audioCtx) return;
+            try {
+                const now = audioCtx.currentTime;
+                if (active) {
+                    motorGain.gain.cancelScheduledValues(now);
+                    motorGain.gain.linearRampToValueAtTime(0.08, now + 0.05);
+                } else {
+                    motorGain.gain.cancelScheduledValues(now);
+                    motorGain.gain.linearRampToValueAtTime(0.0001, now + 0.08);
+                }
+            } catch (e) {}
+        }
+
+        function playNoise(duration, filterFreq, initialGain = 0.3) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(filterFreq, now);
+
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(initialGain, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start(now);
+        }
+
+        function playSound(type) {
+            initAudio();
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+
+            try {
+                if (type === 'fire') {
+                    // Короткий импульс с понижением частоты
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(480, now);
+                    osc.frequency.exponentialRampToValueAtTime(90, now + 0.09);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.09);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.09);
+                    playNoise(0.06, 600, 0.15);
+                } else if (type === 'enemy_fire') {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(260, now);
+                    osc.frequency.exponentialRampToValueAtTime(70, now + 0.1);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'brick') {
+                    // Взрыв кирпичной стены: белый шум с затуханием
+                    playNoise(0.08, 900, 0.35);
+                } else if (type === 'steel') {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(1100, now);
+                    osc.frequency.exponentialRampToValueAtTime(400, now + 0.07);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.07);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.07);
+                } else if (type === 'tank_kill') {
+                    // Взрыв танка: глубокий белый шум с экспоненциальным затуханием
+                    playNoise(0.35, 380, 0.55);
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(130, now);
+                    osc.frequency.exponentialRampToValueAtTime(35, now + 0.35);
+                    gain.gain.setValueAtTime(0.35, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } else if (type === 'bonus_pickup') {
+                    // Двухтоновый звуковой сигнал подбора бонуса
+                    const notes = [587.33, 880.0]; // D5 -> A5
+                    notes.forEach((freq, idx) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+                        gain.gain.setValueAtTime(0.2, now + idx * 0.1);
+                        gain.gain.linearRampToValueAtTime(0.01, now + (idx + 1) * 0.1);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + idx * 0.1);
+                        osc.stop(now + (idx + 1) * 0.1);
+                    });
+                } else if (type === 'base_destroy' || type === 'player_hit') {
+                    playNoise(0.6, 300, 0.7);
+                } else if (type === 'win') {
+                    const notes = [261.6, 329.6, 392.0, 523.2, 659.2];
+                    notes.forEach((f, idx) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.frequency.setValueAtTime(f, now + idx * 0.1);
+                        gain.gain.setValueAtTime(0.25, now + idx * 0.1);
+                        gain.gain.linearRampToValueAtTime(0.01, now + (idx + 1) * 0.1);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + idx * 0.1);
+                        osc.stop(now + (idx + 1) * 0.1);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        const levelLayout = [
+            ".............",
+            ".B.B.B.B.B.B.",
+            ".B.B.B.B.B.B.",
+            ".B.B.B.B.B.B.",
+            ".B.B.B.B.B.B.",
+            ".............",
+            ".B.B...S...B.",
+            ".B.B.B.B.B.B.",
+            "W.W.B.B.B.W.W",
+            "G.G.......G.G",
+            ".B.B.BBB.B.B.",
+            ".B.B.B.B.B.B.",
+            "............."
+        ];
+
+        let map = Array(GRID_BLOCKS).fill(null).map(() => Array(GRID_BLOCKS).fill(EMPTY));
+
+        function initMap() {
+            for (let r = 0; r < 13; r++) {
+                for (let c = 0; c < 13; c++) {
+                    const char = levelLayout[r][c];
+                    let type = EMPTY;
+                    if (char === 'B') type = BRICK;
+                    else if (char === 'S') type = STEEL;
+                    else if (char === 'W') type = WATER;
+                    else if (char === 'G') type = GRASS;
+
+                    map[r * 2][c * 2] = type;
+                    map[r * 2][c * 2 + 1] = type;
+                    map[r * 2 + 1][c * 2] = type;
+                    map[r * 2 + 1][c * 2 + 1] = type;
+                }
+            }
+
+            // База (Орел) 2x2 тайла снизу по центру
+            map[24][12] = BASE; map[24][13] = BASE;
+            map[25][12] = BASE; map[25][13] = BASE;
+
+            setBasePerimeter(BRICK);
+        }
+
+        const BASE_PERIMETER_CELLS = [
+            { r: 23, c: 11 }, { r: 23, c: 12 }, { r: 23, c: 13 }, { r: 23, c: 14 },
+            { r: 24, c: 11 }, { r: 25, c: 11 },
+            { r: 24, c: 14 }, { r: 25, c: 14 }
+        ];
+
+        function setBasePerimeter(type) {
+            if (isBaseDestroyed) return;
+            for (const cell of BASE_PERIMETER_CELLS) {
+                map[cell.r][cell.c] = type;
+            }
+        }
+
+        function generateEnemyRoster() {
+            // Создаем пул из 20 танков с 4 классами и бонусными танками
+            enemyRoster = [];
+            const types = [
+                ENEMY_TYPES.REGULAR, ENEMY_TYPES.REGULAR, ENEMY_TYPES.REGULAR, ENEMY_TYPES.REGULAR,
+                ENEMY_TYPES.FAST,    ENEMY_TYPES.FAST,    ENEMY_TYPES.FAST,
+                ENEMY_TYPES.RAPID,   ENEMY_TYPES.RAPID,   ENEMY_TYPES.RAPID,
+                ENEMY_TYPES.HEAVY,   ENEMY_TYPES.HEAVY,   ENEMY_TYPES.HEAVY
+            ];
+
+            // Индексы танков, несущих бонус (4 танка из 20)
+            const bonusIndices = new Set([3, 8, 13, 17]);
+
+            for (let i = 0; i < TOTAL_ENEMIES_PER_LEVEL; i++) {
+                const template = types[Math.floor(Math.random() * types.length)];
+                enemyRoster.push({
+                    type: template.id,
+                    speed: template.speed,
+                    hp: template.hp,
+                    maxHp: template.hp,
+                    bulletSpeed: template.bulletSpeed,
+                    baseColor: template.color,
+                    score: template.score,
+                    isBonusCarrier: bonusIndices.has(i)
+                });
+            }
+        }
+
+        function updateHUD() {
+            enemyGridEl.innerHTML = '';
+            const remainingIcons = remainingEnemiesToSpawn;
+            for (let i = 0; i < TOTAL_ENEMIES_PER_LEVEL; i++) {
+                const icon = document.createElement('div');
+                icon.className = 'enemy-icon' + (i >= remainingIcons ? ' dead' : '');
+                enemyGridEl.appendChild(icon);
+            }
+            livesDisplayEl.textContent = '⚡' + Math.max(0, playerLives);
+            starDisplayEl.textContent = '★' + player.starLevel;
+            scoreDisplayEl.textContent = score;
+        }
+
+        const player = {
+            x: 4 * TILE_SIZE,
+            y: 12 * TILE_SIZE,
+            width: 28,
+            height: 28,
+            speed: 2,
+            dir: 'UP',
+            color: '#e8c100',
+            invulnerableTimer: 180, // Защитное поле при спавне
+            isAlive: true,
+            starLevel: 0 // Уровень звезды: 0, 1, 2, 3
+        };
+
+        const keys = {
+            up: false, down: false, left: false, right: false, fire: false
+        };
+
+        const dpad = document.getElementById('dpad');
+        const btnFire = document.getElementById('btn-fire');
+        let dpadTouchId = null;
+
+        function updateDpadVisuals() {
+            document.getElementById('ind-up').style.borderBottomColor = keys.up ? '#fff' : '#777';
+            document.getElementById('ind-down').style.borderTopColor = keys.down ? '#fff' : '#777';
+            document.getElementById('ind-left').style.borderRightColor = keys.left ? '#fff' : '#777';
+            document.getElementById('ind-right').style.borderLeftColor = keys.right ? '#fff' : '#777';
+        }
+
+        function handleDpadEvent(e) {
+            e.preventDefault();
+            initAudio();
+            const touch = Array.from(e.touches).find(t => t.target.closest('#dpad') || t.identifier === dpadTouchId);
+            if (!touch) return;
+
+            dpadTouchId = touch.identifier;
+            const rect = dpad.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const dx = touch.clientX - cx;
+            const dy = touch.clientY - cy;
+
+            keys.up = keys.down = keys.left = keys.right = false;
+
+            if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    if (dx > 0) keys.right = true;
+                    else keys.left = true;
+                } else {
+                    if (dy > 0) keys.down = true;
+                    else keys.up = true;
+                }
+            }
+            updateDpadVisuals();
+        }
+
+        function handleDpadEnd(e) {
+            e.preventDefault();
+            const touch = Array.from(e.touches).find(t => t.identifier === dpadTouchId);
+            if (!touch) {
+                dpadTouchId = null;
+                keys.up = keys.down = keys.left = keys.right = false;
+                updateDpadVisuals();
+            }
+        }
+
+        dpad.addEventListener('touchstart', handleDpadEvent, {passive: false});
+        dpad.addEventListener('touchmove', handleDpadEvent, {passive: false});
+        dpad.addEventListener('touchend', handleDpadEnd, {passive: false});
+        dpad.addEventListener('touchcancel', handleDpadEnd, {passive: false});
+
+        function shootPlayer() {
+            initAudio();
+            if (isGameOver || isVictory || !player.isAlive) return;
+
+            // Звезда определяет макс. кол-во снарядов на экране (1 или 2) и их скорость
+            const maxPlayerBullets = player.starLevel >= 2 ? 2 : 1;
+            if (playerBullets.length >= maxPlayerBullets) return;
+
+            const bSpeed = player.starLevel >= 1 ? 7.2 : 5.0;
+            const bSize = 6;
+
+            let bx = player.x + 14 - bSize / 2;
+            let by = player.y + 14 - bSize / 2;
+
+            if (player.dir === 'UP') by = player.y - bSize;
+            else if (player.dir === 'DOWN') by = player.y + 30;
+            else if (player.dir === 'LEFT') bx = player.x - bSize;
+            else if (player.dir === 'RIGHT') bx = player.x + 30;
+
+            playerBullets.push({
+                x: bx,
+                y: by,
+                w: bSize,
+                h: bSize,
+                dir: player.dir,
+                speed: bSpeed
+            });
+
+            playSound('fire');
+        }
+
+        btnFire.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            btnFire.classList.add('active');
+            shootPlayer();
+        }, {passive: false});
+
+        btnFire.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            btnFire.classList.remove('active');
+        }, {passive: false});
+
+        window.addEventListener('keydown', (e) => {
+            initAudio();
+            if (['ArrowUp', 'w', 'W'].includes(e.key)) keys.up = true;
+            if (['ArrowDown', 's', 'S'].includes(e.key)) keys.down = true;
+            if (['ArrowLeft', 'a', 'A'].includes(e.key)) keys.left = true;
+            if (['ArrowRight', 'd', 'D'].includes(e.key)) keys.right = true;
+            if ([' ', 'Enter'].includes(e.key)) {
+                if (!e.repeat) shootPlayer();
+                btnFire.classList.add('active');
+            }
+            updateDpadVisuals();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (['ArrowUp', 'w', 'W'].includes(e.key)) keys.up = false;
+            if (['ArrowDown', 's', 'S'].includes(e.key)) keys.down = false;
+            if (['ArrowLeft', 'a', 'A'].includes(e.key)) keys.left = false;
+            if (['ArrowRight', 'd', 'D'].includes(e.key)) keys.right = false;
+            if ([' ', 'Enter'].includes(e.key)) {
+                btnFire.classList.remove('active');
+            }
+            updateDpadVisuals();
+        });
+
+        function checkCollisionAgainstMap(hx, hy, hw, hh) {
+            if (hx < 0 || hx + hw > CANVAS_SIZE || hy < 0 || hy + hh > CANVAS_SIZE) {
+                return true;
+            }
+
+            const startCol = Math.floor(hx / BLOCK_SIZE);
+            const endCol = Math.floor((hx + hw - 0.1) / BLOCK_SIZE);
+            const startRow = Math.floor(hy / BLOCK_SIZE);
+            const endRow = Math.floor((hy + hh - 0.1) / BLOCK_SIZE);
+
+            for (let r = startRow; r <= endRow; r++) {
+                for (let c = startCol; c <= endCol; c++) {
+                    const block = map[r] && map[r][c];
+                    // Вода блокирует движение танков! Кусты не блокируют.
+                    if (block === BRICK || block === STEEL || block === WATER || block === BASE) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function isBoxColliding(b1, b2) {
+            return b1.x < b2.x + b2.width &&
+                   b1.x + b1.width > b2.x &&
+                   b1.y < b2.y + b2.height &&
+                   b1.y + b1.height > b2.y;
+        }
+
+        function checkTankCollision(tank, newX, newY) {
+            const hx = newX + 2;
+            const hy = newY + 2;
+            const hw = tank.width;
+            const hh = tank.height;
+
+            if (checkCollisionAgainstMap(hx, hy, hw, hh)) return true;
+
+            const testBox = { x: newX, y: newY, width: tank.width + 4, height: tank.height + 4 };
+
+            if (tank === player) {
+                for (const en of enemies) {
+                    if (en.isReady && isBoxColliding(testBox, en)) return true;
+                }
+            } else {
+                if (player.isAlive && isBoxColliding(testBox, player)) return true;
+                for (const en of enemies) {
+                    if (en !== tank && en.isReady && isBoxColliding(testBox, en)) return true;
+                }
+            }
+
+            return false;
+        }
+
+        function updatePlayer() {
+            if (isGameOver || isVictory || !player.isAlive) {
+                setMotorRumble(false);
+                return;
+            }
+
+            if (player.invulnerableTimer > 0) player.invulnerableTimer--;
+
+            let dx = 0, dy = 0;
+            let moving = false;
+
+            if (keys.up) { dy = -player.speed; player.dir = 'UP'; moving = true; }
+            else if (keys.down) { dy = player.speed; player.dir = 'DOWN'; moving = true; }
+            else if (keys.left) { dx = -player.speed; player.dir = 'LEFT'; moving = true; }
+            else if (keys.right) { dx = player.speed; player.dir = 'RIGHT'; moving = true; }
+
+            setMotorRumble(moving);
+
+            if (moving) {
+                if (!checkTankCollision(player, player.x + dx, player.y + dy)) {
+                    player.x += dx;
+                    player.y += dy;
+                } else {
+                    const TILE_ALIGN_TOLERANCE = 12;
+                    if (dx !== 0) {
+                        const alignY = Math.round(player.y / BLOCK_SIZE) * BLOCK_SIZE;
+                        const diffY = alignY - player.y;
+                        if (Math.abs(diffY) > 0 && Math.abs(diffY) <= TILE_ALIGN_TOLERANCE) {
+                            const step = Math.sign(diffY) * Math.min(player.speed, Math.abs(diffY));
+                            if (!checkTankCollision(player, player.x, player.y + step)) player.y += step;
+                        }
+                    } else if (dy !== 0) {
+                        const alignX = Math.round(player.x / BLOCK_SIZE) * BLOCK_SIZE;
+                        const diffX = alignX - player.x;
+                        if (Math.abs(diffX) > 0 && Math.abs(diffX) <= TILE_ALIGN_TOLERANCE) {
+                            const step = Math.sign(diffX) * Math.min(player.speed, Math.abs(diffX));
+                            if (!checkTankCollision(player, player.x + step, player.y)) player.x += step;
+                        }
+                    }
+                }
+            }
+
+            // Проверка подбора бонусов танком игрока
+            for (let i = bonuses.length - 1; i >= 0; i--) {
+                const b = bonuses[i];
+                if (isBoxColliding(player, b)) {
+                    applyBonus(b.type);
+                    bonuses.splice(i, 1);
+                }
+            }
+        }
+
+        function killPlayer() {
+            if (!player.isAlive || player.invulnerableTimer > 0) return;
+
+            spawnExplosion(player.x + 14, player.y + 14, true);
+            playSound('player_hit');
+            player.isAlive = false;
+            playerLives--;
+            player.starLevel = Math.max(0, player.starLevel - 1);
+            updateHUD();
+
+            if (playerLives <= 0) {
+                triggerGameOver('ЗАКОНЧИЛИСЬ ЖИЗНИ!');
+            } else {
+                setTimeout(() => {
+                    if (!isGameOver && !isVictory) {
+                        player.x = 4 * TILE_SIZE;
+                        player.y = 12 * TILE_SIZE;
+                        player.dir = 'UP';
+                        player.isAlive = true;
+                        player.invulnerableTimer = 180;
+                    }
+                }, 1000);
+            }
+        }
+
+        function spawnBonusOnRandomFreeCell() {
+            // Поиск свободной ячейки для появления бонуса
+            const freeCells = [];
+            for (let r = 2; r < GRID_BLOCKS - 2; r++) {
+                for (let c = 2; c < GRID_BLOCKS - 2; c++) {
+                    if (map[r][c] === EMPTY || map[r][c] === GRASS) {
+                        freeCells.push({ x: c * BLOCK_SIZE, y: r * BLOCK_SIZE });
+                    }
+                }
+            }
+            if (freeCells.length === 0) return;
+
+            const spot = freeCells[Math.floor(Math.random() * freeCells.length)];
+            const randomType = BONUS_TYPES[Math.floor(Math.random() * BONUS_TYPES.length)];
+
+            bonuses.push({
+                type: randomType,
+                x: spot.x,
+                y: spot.y,
+                width: 28,
+                height: 28,
+                timer: 900 // 15 секунд существования бонуса на поле
+            });
+        }
+
+        function applyBonus(type) {
+            playSound('bonus_pickup');
+            score += 500;
+            updateHUD();
+
+            if (type === 'grenade') {
+                // Взрывает всех врагов на экране
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const en = enemies[i];
+                    spawnExplosion(en.x + 14, en.y + 14, true);
+                    score += en.score;
+                    destroyedEnemiesCount++;
+                }
+                enemies = [];
+                playSound('tank_kill');
+                updateHUD();
+                if (destroyedEnemiesCount >= TOTAL_ENEMIES_PER_LEVEL) {
+                    triggerStageClear();
+                }
+            } else if (type === 'clock') {
+                // Заморозка ИИ врагов на 8 секунд (480 кадров)
+                freezeEnemiesTimer = 480;
+            } else if (type === 'shovel') {
+                // Окружает базу бетоном на 15 секунд (900 кадров)
+                shovelTimer = 900;
+                setBasePerimeter(STEEL);
+            } else if (type === 'star') {
+                // Улучшает танк игрока (макс 3 уровень)
+                player.starLevel = Math.min(3, player.starLevel + 1);
+                updateHUD();
+            } else if (type === 'helmet') {
+                // Щит неуязвимости на 10 секунд (600 кадров)
+                player.invulnerableTimer = 600;
+            }
+        }
+
+        function updateBonusTimers() {
+            // Заморозка врагов
+            if (freezeEnemiesTimer > 0) freezeEnemiesTimer--;
+
+            // Лопата: бетонная защита базы
+            if (shovelTimer > 0) {
+                shovelTimer--;
+                if (shovelTimer <= 180) {
+                    // Последние 3 секунды мигает между сталью и кирпичом
+                    const flash = Math.floor(shovelTimer / 15) % 2 === 0;
+                    setBasePerimeter(flash ? STEEL : BRICK);
+                }
+                if (shovelTimer === 0) {
+                    setBasePerimeter(BRICK);
+                }
+            }
+
+            // Время жизни лежащих бонусов
+            for (let i = bonuses.length - 1; i >= 0; i--) {
+                bonuses[i].timer--;
+                if (bonuses[i].timer <= 0) {
+                    bonuses.splice(i, 1);
+                }
+            }
+        }
+
+        function spawnEnemyAtNextPoint() {
+            if (remainingEnemiesToSpawn <= 0 || enemies.length >= 4) return;
+
+            const pt = ENEMY_SPAWN_COORDS[nextSpawnPointIndex];
+            nextSpawnPointIndex = (nextSpawnPointIndex + 1) % ENEMY_SPAWN_COORDS.length;
+
+            const spawnBox = { x: pt.x, y: pt.y, width: 28, height: 28 };
+            if (player.isAlive && isBoxColliding(spawnBox, player)) return;
+            if (enemies.some(en => isBoxColliding(spawnBox, en))) return;
+
+            remainingEnemiesToSpawn--;
+            updateHUD();
+
+            const rosterData = enemyRoster[TOTAL_ENEMIES_PER_LEVEL - remainingEnemiesToSpawn - 1];
+
+            spawnEffects.push({
+                x: pt.x,
+                y: pt.y,
+                timer: 60,
+                onComplete: () => {
+                    enemies.push({
+                        x: pt.x,
+                        y: pt.y,
+                        width: 28,
+                        height: 28,
+                        speed: rosterData.speed,
+                        hp: rosterData.hp,
+                        maxHp: rosterData.maxHp,
+                        bulletSpeed: rosterData.bulletSpeed,
+                        type: rosterData.type,
+                        baseColor: rosterData.baseColor,
+                        score: rosterData.score,
+                        isBonusCarrier: rosterData.isBonusCarrier,
+                        dir: 'DOWN',
+                        shootCooldown: Math.floor(Math.random() * 80 + 50),
+                        isReady: true
+                    });
+                }
+            });
+        }
+
+        function updateSpawnSystem() {
+            if (isGameOver || isVictory) return;
+
+            spawnEnemyTimer++;
+            if (spawnEnemyTimer >= 140) {
+                spawnEnemyTimer = 0;
+                if (enemies.length < 4 && remainingEnemiesToSpawn > 0) {
+                    spawnEnemyAtNextPoint();
+                }
+            }
+
+            for (let i = spawnEffects.length - 1; i >= 0; i--) {
+                const eff = spawnEffects[i];
+                eff.timer--;
+                if (eff.timer <= 0) {
+                    eff.onComplete();
+                    spawnEffects.splice(i, 1);
+                }
+            }
+        }
+
+        const BIASED_DIRS = ['DOWN', 'DOWN', 'LEFT', 'RIGHT', 'UP'];
+
+        function updateEnemies() {
+            if (isGameOver || isVictory) return;
+            if (freezeEnemiesTimer > 0) return; // Действие бонуса "Часы"
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const en = enemies[i];
+                if (!en.isReady) continue;
+
+                let dx = 0, dy = 0;
+                if (en.dir === 'UP') dy = -en.speed;
+                else if (en.dir === 'DOWN') dy = en.speed;
+                else if (en.dir === 'LEFT') dx = -en.speed;
+                else if (en.dir === 'RIGHT') dx = en.speed;
+
+                const canMove = !checkTankCollision(en, en.x + dx, en.y + dy);
+
+                if (canMove && Math.random() > 0.02) {
+                    en.x += dx;
+                    en.y += dy;
+                } else {
+                    const validDirs = BIASED_DIRS.filter(d => d !== en.dir);
+                    en.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+                    en.x = Math.round(en.x / BLOCK_SIZE) * BLOCK_SIZE;
+                    en.y = Math.round(en.y / BLOCK_SIZE) * BLOCK_SIZE;
+                }
+
+                en.shootCooldown--;
+                if (en.shootCooldown <= 0) {
+                    en.shootCooldown = Math.floor(Math.random() * 90 + 60);
+                    shootEnemy(en);
+                }
+            }
+        }
+
+        function shootEnemy(en) {
+            const bSpeed = en.bulletSpeed;
+            const bSize = 6;
+            let bx = en.x + 14 - bSize / 2;
+            let by = en.y + 14 - bSize / 2;
+
+            if (en.dir === 'UP') by = en.y - bSize;
+            else if (en.dir === 'DOWN') by = en.y + 30;
+            else if (en.dir === 'LEFT') bx = en.x - bSize;
+            else if (en.dir === 'RIGHT') bx = en.x + 30;
+
+            enemyBullets.push({
+                x: bx,
+                y: by,
+                w: bSize,
+                h: bSize,
+                dir: en.dir,
+                speed: bSpeed
+            });
+            playSound('enemy_fire');
+        }
+
+        function spawnExplosion(x, y, isBig = false) {
+            explosions.push({
+                x: x,
+                y: y,
+                frame: 0,
+                maxFrames: isBig ? 18 : 8,
+                isBig: isBig
+            });
+        }
+
+        function updateExplosions() {
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const exp = explosions[i];
+                exp.frame++;
+                if (exp.frame >= exp.maxFrames) {
+                    explosions.splice(i, 1);
+                }
+            }
+        }
+
+        function triggerGameOver(reason = 'ШТАБ БЫЛ УНИЧТОЖЕН!') {
+            if (isGameOver || isVictory) return;
+            isGameOver = true;
+            setMotorRumble(false);
+            gameOverReasonEl.textContent = reason;
+            finalScoreOverEl.textContent = `Очки: ${score}`;
+            playSound('base_destroy');
+            setTimeout(() => {
+                gameOverModal.style.display = 'flex';
+            }, 600);
+        }
+
+        function triggerStageClear() {
+            if (isGameOver || isVictory) return;
+            isVictory = true;
+            setMotorRumble(false);
+            finalScoreWinEl.textContent = `Очки: ${score}`;
+            playSound('win');
+            setTimeout(() => {
+                stageClearModal.style.display = 'flex';
+            }, 800);
+        }
+
+        function checkBulletEnvironmentCollision(bullet) {
+            const bx = bullet.x;
+            const by = bullet.y;
+            const bw = bullet.w;
+            const bh = bullet.h;
+
+            if (bx < 0 || bx + bw > CANVAS_SIZE || by < 0 || by + bh > CANVAS_SIZE) {
+                return { hit: true, type: STEEL, x: bx + bw / 2, y: by + bh / 2 };
+            }
+
+            const testPoints = [];
+            if (bullet.dir === 'UP') {
+                testPoints.push({x: bx - 2, y: by}, {x: bx + bw / 2, y: by}, {x: bx + bw + 2, y: by});
+            } else if (bullet.dir === 'DOWN') {
+                testPoints.push({x: bx - 2, y: by + bh}, {x: bx + bw / 2, y: by + bh}, {x: bx + bw + 2, y: by + bh});
+            } else if (bullet.dir === 'LEFT') {
+                testPoints.push({x: bx, y: by - 2}, {x: bx, y: by + bh / 2}, {x: bx, y: by + bh + 2});
+            } else if (bullet.dir === 'RIGHT') {
+                testPoints.push({x: bx + bw, y: by - 2}, {x: bx + bw, y: by + bh / 2}, {x: bx + bw, y: by + bh + 2});
+            }
+
+            let hitBlocks = [];
+            let hitType = EMPTY;
+
+            for (const pt of testPoints) {
+                const c = Math.floor(pt.x / BLOCK_SIZE);
+                const r = Math.floor(pt.y / BLOCK_SIZE);
+                if (r >= 0 && r < GRID_BLOCKS && c >= 0 && c < GRID_BLOCKS) {
+                    const block = map[r][c];
+                    // Снаряды беспрепятственно пролетают над водой (WATER) и кустами (GRASS)!
+                    if (block === BRICK || block === STEEL || block === BASE) {
+                        if (!hitBlocks.some(b => b.r === r && b.c === c)) {
+                            hitBlocks.push({ r, c, type: block });
+                        }
+                        if (block === STEEL) hitType = STEEL;
+                        else if (block === BASE) hitType = BASE;
+                        else if (hitType === EMPTY) hitType = BRICK;
+                    }
+                }
+            }
+
+            if (hitBlocks.length > 0) {
+                let destroyedBricks = false;
+                for (const b of hitBlocks) {
+                    if (b.type === BRICK) {
+                        map[b.r][b.c] = EMPTY;
+                        destroyedBricks = true;
+                    } else if (b.type === BASE) {
+                        isBaseDestroyed = true;
+                        triggerGameOver('ШТАБ БЫЛ УНИЧТОЖЕН!');
+                        spawnExplosion(13 * BLOCK_SIZE, 25 * BLOCK_SIZE, true);
+                    }
+                }
+                return { hit: true, type: hitType, destroyedBricks, x: bx + bw / 2, y: by + bh / 2 };
+            }
+
+            return { hit: false };
+        }
+
+        function updateBullets() {
+            // 1. Снаряды игрока
+            for (let pIdx = playerBullets.length - 1; pIdx >= 0; pIdx--) {
+                const pb = playerBullets[pIdx];
+                if (pb.dir === 'UP') pb.y -= pb.speed;
+                else if (pb.dir === 'DOWN') pb.y += pb.speed;
+                else if (pb.dir === 'LEFT') pb.x -= pb.speed;
+                else if (pb.dir === 'RIGHT') pb.x += pb.speed;
+
+                let hitEnemyIndex = -1;
+                for (let i = 0; i < enemies.length; i++) {
+                    const en = enemies[i];
+                    if (en.isReady && isBoxColliding({ x: pb.x, y: pb.y, width: pb.w, height: pb.h }, en)) {
+                        hitEnemyIndex = i;
+                        break;
+                    }
+                }
+
+                if (hitEnemyIndex !== -1) {
+                    const en = enemies[hitEnemyIndex];
+                    en.hp--;
+
+                    if (en.hp <= 0) {
+                        spawnExplosion(en.x + 14, en.y + 14, true);
+                        playSound('tank_kill');
+
+                        // Если уничтожен бонусоносец — выбросить случайный бонус
+                        if (en.isBonusCarrier) {
+                            spawnBonusOnRandomFreeCell();
+                        }
+
+                        score += en.score;
+                        destroyedEnemiesCount++;
+                        enemies.splice(hitEnemyIndex, 1);
+                        updateHUD();
+
+                        if (destroyedEnemiesCount >= TOTAL_ENEMIES_PER_LEVEL) {
+                            triggerStageClear();
+                        }
+                    } else {
+                        // Попадание в тяжелый танк без уничтожения
+                        spawnExplosion(pb.x + pb.w / 2, pb.y + pb.h / 2, false);
+                        playSound('steel');
+                    }
+
+                    playerBullets.splice(pIdx, 1);
+                    continue;
+                }
+
+                const envHit = checkBulletEnvironmentCollision(pb);
+                if (envHit.hit) {
+                    if (envHit.type === STEEL) playSound('steel');
+                    else if (envHit.destroyedBricks) playSound('brick');
+                    spawnExplosion(envHit.x, envHit.y, envHit.type === BASE);
+                    playerBullets.splice(pIdx, 1);
+                }
+            }
+
+            // 2. Снаряды врагов
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                const eb = enemyBullets[i];
+                if (eb.dir === 'UP') eb.y -= eb.speed;
+                else if (eb.dir === 'DOWN') eb.y += eb.speed;
+                else if (eb.dir === 'LEFT') eb.x -= eb.speed;
+                else if (eb.dir === 'RIGHT') eb.x += eb.speed;
+
+                // Столкновение лоб-в-лоб с пулями игрока
+                let collidedWithPlayerBullet = false;
+                for (let pbIdx = playerBullets.length - 1; pbIdx >= 0; pbIdx--) {
+                    const pb = playerBullets[pbIdx];
+                    if (isBoxColliding(
+                        { x: eb.x, y: eb.y, width: eb.w, height: eb.h },
+                        { x: pb.x, y: pb.y, width: pb.w, height: pb.h }
+                    )) {
+                        spawnExplosion((eb.x + pb.x) / 2, (eb.y + pb.y) / 2);
+                        playSound('steel');
+                        playerBullets.splice(pbIdx, 1);
+                        collidedWithPlayerBullet = true;
+                        break;
+                    }
+                }
+
+                if (collidedWithPlayerBullet) {
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+
+                // Попадание во вражескую пулю по игроку
+                if (player.isAlive && isBoxColliding(
+                    { x: eb.x, y: eb.y, width: eb.w, height: eb.h },
+                    player
+                )) {
+                    enemyBullets.splice(i, 1);
+                    killPlayer();
+                    continue;
+                }
+
+                // Столкновение со стенами и базой
+                const envHit = checkBulletEnvironmentCollision(eb);
+                if (envHit.hit) {
+                    if (envHit.type === STEEL) playSound('steel');
+                    else if (envHit.destroyedBricks) playSound('brick');
+                    spawnExplosion(envHit.x, envHit.y, envHit.type === BASE);
+                    enemyBullets.splice(i, 1);
+                }
+            }
+        }
+
+        function drawMapBackground() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+            const waterPhase = Math.floor(Date.now() / 500) % 2 === 0;
+
+            for (let r = 0; r < GRID_BLOCKS; r++) {
+                for (let c = 0; c < GRID_BLOCKS; c++) {
+                    const block = map[r][c];
+                    const px = c * BLOCK_SIZE;
+                    const py = r * BLOCK_SIZE;
+
+                    if (block === BRICK) {
+                        ctx.fillStyle = '#b84418';
+                        ctx.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.fillStyle = '#681c04';
+                        ctx.fillRect(px + BLOCK_SIZE - 2, py, 2, BLOCK_SIZE);
+                        ctx.fillRect(px, py + BLOCK_SIZE - 2, BLOCK_SIZE, 2);
+                        ctx.fillStyle = '#e88c68';
+                        ctx.fillRect(px, py, BLOCK_SIZE, 1);
+                        ctx.fillRect(px, py, 1, BLOCK_SIZE);
+                        ctx.fillStyle = '#681c04';
+                        ctx.fillRect(px, py + 7, BLOCK_SIZE, 2);
+                    } 
+                    else if (block === STEEL) {
+                        ctx.fillStyle = '#888';
+                        ctx.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.fillStyle = '#fff';
+                        ctx.fillRect(px + 2, py + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
+                        ctx.fillStyle = '#aaa';
+                        ctx.fillRect(px + 4, py + 4, BLOCK_SIZE - 8, BLOCK_SIZE - 8);
+                    }
+                    else if (block === WATER) {
+                        // Анимированная вода: блокирует танки, снаряды летят над ней
+                        ctx.fillStyle = waterPhase ? '#1d3557' : '#2a4365';
+                        ctx.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.fillStyle = '#48cae4';
+                        const offset = waterPhase ? 2 : 6;
+                        ctx.fillRect(px + offset, py + 3, 6, 2);
+                        ctx.fillRect(px + (14 - offset), py + 9, 6, 2);
+                    }
+                    else if (block === BASE && r === 24 && c === 12) {
+                        drawBase(px, py);
+                    }
+                }
+            }
+
+            if (isBaseDestroyed) {
+                drawBase(12 * BLOCK_SIZE, 24 * BLOCK_SIZE);
+            }
+        }
+
+        function drawBase(x, y) {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x, y, 32, 32);
+
+            if (!isBaseDestroyed) {
+                // Орел
+                ctx.fillStyle = '#ddaa00';
+                ctx.beginPath();
+                ctx.moveTo(x + 16, y + 4);
+                ctx.lineTo(x + 26, y + 12);
+                ctx.lineTo(x + 22, y + 18);
+                ctx.lineTo(x + 28, y + 24);
+                ctx.lineTo(x + 18, y + 28);
+                ctx.lineTo(x + 14, y + 28);
+                ctx.lineTo(x + 4, y + 24);
+                ctx.lineTo(x + 10, y + 18);
+                ctx.lineTo(x + 6, y + 12);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(x + 13, y + 12, 6, 8);
+                ctx.fillStyle = '#d00';
+                ctx.fillRect(x + 14, y + 7, 4, 4);
+            } else {
+                // Руины штаба и флаг поражения
+                ctx.fillStyle = '#444';
+                ctx.fillRect(x + 4, y + 22, 24, 8);
+                ctx.fillStyle = '#888';
+                ctx.fillRect(x + 8, y + 6, 3, 20);
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(x + 11, y + 6, 14, 10);
+                ctx.fillStyle = '#bbb';
+                ctx.fillRect(x + 11, y + 16, 14, 2);
+            }
+        }
+
+        function drawMapForeground() {
+            // Кусты (GRASS): танки и снаряды отрисовываются ПОД кустами!
+            for (let r = 0; r < GRID_BLOCKS; r++) {
+                for (let c = 0; c < GRID_BLOCKS; c++) {
+                    if (map[r][c] === GRASS) {
+                        const px = c * BLOCK_SIZE;
+                        const py = r * BLOCK_SIZE;
+                        ctx.fillStyle = '#2d8a1e';
+                        ctx.fillRect(px, py, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.fillStyle = '#1b5a12';
+                        ctx.fillRect(px + 2, py + 2, 4, 4);
+                        ctx.fillRect(px + 10, py + 8, 4, 4);
+                        ctx.fillRect(px + 4, py + 12, 4, 4);
+                        ctx.fillStyle = '#40b32c';
+                        ctx.fillRect(px + 8, py + 2, 3, 3);
+                    }
+                }
+            }
+        }
+
+        function drawBonuses() {
+            const time = Date.now();
+            for (const b of bonuses) {
+                // Мерцание в конце времени жизни
+                if (b.timer < 180 && Math.floor(time / 80) % 2 === 0) continue;
+
+                ctx.save();
+                ctx.translate(b.x, b.y);
+
+                // Рамка бонуса
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, 28, 28);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(1, 1, 26, 26);
+
+                if (b.type === 'grenade') {
+                    // Граната
+                    ctx.fillStyle = '#2d6a4f';
+                    ctx.fillRect(8, 8, 12, 14);
+                    ctx.fillStyle = '#e63946';
+                    ctx.fillRect(11, 4, 6, 4);
+                } else if (b.type === 'clock') {
+                    // Часы
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(14, 14, 9, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(14, 14);
+                    ctx.lineTo(14, 8);
+                    ctx.moveTo(14, 14);
+                    ctx.lineTo(18, 14);
+                    ctx.stroke();
+                } else if (b.type === 'shovel') {
+                    // Лопата
+                    ctx.fillStyle = '#888';
+                    ctx.fillRect(12, 5, 4, 10);
+                    ctx.fillStyle = '#ffb703';
+                    ctx.fillRect(8, 14, 12, 10);
+                } else if (b.type === 'star') {
+                    // Звезда
+                    ctx.fillStyle = '#ffd166';
+                    ctx.beginPath();
+                    ctx.arc(14, 14, 9, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#d00';
+                    ctx.fillRect(11, 11, 6, 6);
+                } else if (b.type === 'helmet') {
+                    // Каска (щит)
+                    ctx.fillStyle = '#48cae4';
+                    ctx.beginPath();
+                    ctx.arc(14, 14, 9, Math.PI, 0);
+                    ctx.fill();
+                    ctx.fillRect(5, 14, 18, 4);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        function drawTank(t, isPlayer = false) {
+            ctx.save();
+            ctx.translate(t.x + 14, t.y + 14);
+
+            if (t.dir === 'UP') ctx.rotate(0);
+            else if (t.dir === 'RIGHT') ctx.rotate(Math.PI / 2);
+            else if (t.dir === 'DOWN') ctx.rotate(Math.PI);
+            else if (t.dir === 'LEFT') ctx.rotate(-Math.PI / 2);
+
+            // Определение цвета корпуса (для тяжелого танка — зависит от HP, для бонусоносца — мигает)
+            let bodyColor = isPlayer ? t.color : t.baseColor;
+            if (!isPlayer) {
+                if (t.type === 'HEAVY') {
+                    bodyColor = HEAVY_HP_COLORS[t.hp] || '#2d6a4f';
+                }
+                if (t.isBonusCarrier) {
+                    const flash = Math.floor(Date.now() / 100) % 2 === 0;
+                    bodyColor = flash ? '#e63946' : '#ffffff';
+                }
+            }
+
+            // Гусеницы
+            ctx.fillStyle = '#333';
+            ctx.fillRect(-14, -14, 6, 28);
+            ctx.fillRect(8, -14, 6, 28);
+
+            ctx.fillStyle = '#111';
+            const trackOffset = (t.x + t.y) % 4 < 2 ? 0 : 2;
+            for (let i = -12 + trackOffset; i < 14; i += 4) {
+                ctx.fillRect(-14, i, 6, 2);
+                ctx.fillRect(8, i, 6, 2);
+            }
+
+            // Корпус
+            ctx.fillStyle = bodyColor;
+            ctx.fillRect(-8, -12, 16, 24);
+
+            // Башня
+            ctx.fillStyle = isPlayer ? '#c49b00' : '#555555';
+            ctx.fillRect(-5, -6, 10, 12);
+
+            // Дуло
+            ctx.fillStyle = '#ccc';
+            ctx.fillRect(-2, -18, 4, 12);
+
+            ctx.restore();
+
+            // Мерцающий силовой щит неуязвимости
+            if (isPlayer && t.invulnerableTimer > 0) {
+                ctx.save();
+                ctx.strokeStyle = Math.floor(Date.now() / 50) % 2 === 0 ? '#48cae4' : '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(t.x + 14, t.y + 14, 18, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        function drawBullets() {
+            // Пули игрока
+            for (const pb of playerBullets) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(pb.x, pb.y, pb.w, pb.h);
+                ctx.fillStyle = '#ffd166';
+                ctx.fillRect(pb.x + 1, pb.y + 1, pb.w - 2, pb.h - 2);
+            }
+            // Пули врагов
+            for (const eb of enemyBullets) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(eb.x, eb.y, eb.w, eb.h);
+                ctx.fillStyle = '#e63946';
+                ctx.fillRect(eb.x + 1, eb.y + 1, eb.w - 2, eb.h - 2);
+            }
+        }
+
+        function drawExplosions() {
+            for (const exp of explosions) {
+                const progress = exp.frame / exp.maxFrames;
+                const radius = exp.isBig ? (8 + progress * 24) : (3 + progress * 8);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = progress < 0.3 ? '#ffffff' : (progress < 0.7 ? '#ff9e00' : '#e63946');
+                ctx.fill();
+
+                if (exp.isBig) {
+                    ctx.beginPath();
+                    ctx.arc(exp.x, exp.y, radius * 0.55, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffea00';
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        function drawSpawnEffects() {
+            const time = Date.now();
+            for (const eff of spawnEffects) {
+                const step = Math.floor(time / 75) % 4;
+                ctx.save();
+                ctx.translate(eff.x + 14, eff.y + 14);
+                ctx.fillStyle = step % 2 === 0 ? '#ffffff' : '#ffd166';
+                ctx.beginPath();
+                for (let i = 0; i < 8; i++) {
+                    const r = (i % 2 === 0) ? 14 : 5;
+                    const angle = (i * Math.PI) / 4;
+                    const sx = Math.cos(angle) * r;
+                    const sy = Math.sin(angle) * r;
+                    if (i === 0) ctx.moveTo(sx, sy);
+                    else ctx.lineTo(sx, sy);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function resetGame(fullReset = true) {
+            isGameOver = false;
+            isVictory = false;
+            isBaseDestroyed = false;
+            gameOverModal.style.display = 'none';
+            stageClearModal.style.display = 'none';
+
+            if (fullReset) {
+                score = 0;
+                playerLives = 3;
+                currentStage = 1;
+                player.starLevel = 0;
+            } else {
+                currentStage++;
+            }
+
+            document.getElementById('stage-display').textContent = currentStage;
+            remainingEnemiesToSpawn = TOTAL_ENEMIES_PER_LEVEL;
+            destroyedEnemiesCount = 0;
+            freezeEnemiesTimer = 0;
+            shovelTimer = 0;
+            enemies = [];
+            enemyBullets = [];
+            playerBullets = [];
+            spawnEffects = [];
+            bonuses = [];
+            explosions.length = 0;
+            spawnEnemyTimer = 0;
+
+            player.x = 4 * TILE_SIZE;
+            player.y = 12 * TILE_SIZE;
+            player.dir = 'UP';
+            player.isAlive = true;
+            player.invulnerableTimer = 180;
+
+            initMap();
+            generateEnemyRoster();
+            updateHUD();
+        }
+
+        btnRestart.addEventListener('click', () => resetGame(true));
+        btnNext.addEventListener('click', () => resetGame(false));
+
+        function gameLoop() {
+            updatePlayer();
+            updateSpawnSystem();
+            updateEnemies();
+            updateBullets();
+            updateExplosions();
+            updateBonusTimers();
+
+            // 1. Задний фон: земля, кирпичи, сталь, анимированная вода, база
+            drawMapBackground();
+
+            // 2. Лежащие бонусы
+            drawBonuses();
+
+            // 3. Звездочки спавна танков
+            drawSpawnEffects();
+
+            // 4. Танки (находятся ПОД кустами)
+            if (player.isAlive) {
+                drawTank(player, true);
+            }
+            for (const en of enemies) {
+                drawTank(en, false);
+            }
+
+            // 5. Снаряды и взрывы (летят над водой и под кустами)
+            drawBullets();
+            drawExplosions();
+
+            // 6. Передний план (Кусты / GRASS отрисовываются ПОВЕРХ танков и пуль)
+            drawMapForeground();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Запуск
+        initMap();
+        generateEnemyRoster();
+        updateHUD();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
